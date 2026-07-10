@@ -28,3 +28,27 @@ Thumbs.db
 .DS_Store
 
 external/FIUBench_official/
+generate_final_figures.py.bak_20260629_155712
+controls/teacher_forced_lbcka_l16.backup_20260620_150002.py
+build_twodimaudit_home_transfer.ps1
+build_twodimaudit_home_transfer_v2.ps1
+build_twodimaudit_home_transfer_v3.ps1
+PACKAGE_MANIFEST.json
+PACKAGE_VALIDATION.txt
+install_pipeline_v4.ps1
+diagnose_preflight.ps1
+find_saved_response_files.py
+locate_missing_cross_dataset_results.py
+inspect_blip2_schema.py
+diagnose_llava_generation.py
+apply_legacy_metadata_and_rebuild_audit.py
+repair_and_rescore_mllmu_bench.py
+audit_cross_dataset_sources.py
+audit_fiubench_official_protocol.py
+audit_mllmu_bench_scores.py
+no_gpu_response_audit_v2.py
+no_gpu_blip2_and_diversity_audit.py
+reviewer_no_gpu_audit.py
+E4_eval_unlok.py
+controls/check_tf_feasibility.py
+controls/check_tf_feasibility_correct_path.py
