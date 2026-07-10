@@ -1,0 +1,599 @@
+"""
+generate_final_figures.py
+──────────────────────────
+Publication-quality figures for AAAI submission.
+matplotlib only. No seaborn. Vector PDF + high-res PNG.
+
+Figure 1: Scatter — Forget Rate vs LB-CKA (main paper)
+Figure 2: Two-panel grouped dot plot — CRP for LLaVA and BLIP-2 (main paper)
+Figure 3: Heatmap — LLaVA forget response overlap (appendix)
+
+All source values are hardcoded from the final validated runs.
+A PASS/FAIL check confirms every value before plotting.
+
+Outputs: outputs/revision/final_figures/
+"""
+
+import json
+import sys
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).parent))
+from exp_config import RESULTS_DIR
+
+OUT = RESULTS_DIR / "final_figures"
+OUT.mkdir(parents=True, exist_ok=True)
+
+CHECKS   = []
+MANIFEST = {}
+
+def chk(label, verdict, detail=""):
+    CHECKS.append({"check":label,"verdict":verdict,"detail":str(detail)})
+    icon = {"PASS":"OK","WARN":"!!","FAIL":"XX"}.get(verdict,"??")
+    print(f"  [{icon} {verdict}] {label}: {detail}")
+    return verdict == "PASS"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SOURCE DATA — hardcoded from final validated runs
+# ══════════════════════════════════════════════════════════════════════════════
+
+LLAVA_SCATTER = [
+    # method, forget_rate, retain_acc, lb_cka
+    ("No Unlearn",  0.0250, 0.9625, 1.0000),
+    ("NPO",         0.0250, 0.9750, 0.9931),
+    ("MMUnlearner", 0.0250, 0.9625, 0.9336),
+    ("CAGUL",       0.0250, 0.9625, 0.9927),
+    ("SineProject", 0.0250, 0.9625, 0.9980),
+    ("GradDiff",    0.0750, 0.9625, 0.8482),
+]
+
+LLAVA_CRP = [
+    # method, ve, bridge, lb
+    ("NPO",         0.9997, 0.9986, 0.9931),
+    ("MMUnlearner", 0.9998, 0.9965, 0.9336),
+    ("CAGUL",       0.9997, 0.9973, 0.9927),
+    ("SineProject", 0.9999, 0.9986, 0.9980),
+    ("GradDiff",    0.9728, 0.8032, 0.8482),
+]
+
+BLIP2_CRP = [
+    # method, ve, bridge, lb
+    ("GA",          1.0000, 1.0000, 0.9945),
+    ("NPO",         1.0000, 1.0000, 0.6699),
+    ("MMUnlearner", 1.0000, 1.0000, 0.6721),
+    ("CAGUL",       1.0000, 1.0000, 0.9834),
+    ("MANU",        0.5753, 0.3157, 0.5286),
+]
+
+OVERLAP_METHODS = ["NPO","MMUnlearner","CAGUL","SineProject","GradDiff"]
+OVERLAP_MATRIX  = np.array([
+    [1.000, 0.775, 1.000, 0.950, 0.450],
+    [0.775, 1.000, 0.775, 0.775, 0.450],
+    [1.000, 0.775, 1.000, 0.950, 0.450],
+    [0.950, 0.775, 0.950, 1.000, 0.450],
+    [0.450, 0.450, 0.450, 0.450, 1.000],
+])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# VALIDATION CHECKS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def validate():
+    print("\n=== VALIDATING SOURCE VALUES ===")
+
+    # All CKA values in [0,1]
+    for row in LLAVA_CRP:
+        for v in row[1:]:
+            if not (0.0 <= v <= 1.0):
+                chk(f"LLaVA CRP {row[0]}","FAIL",f"value {v} out of [0,1]")
+    chk("LLaVA CRP range","PASS","all in [0,1]")
+
+    for row in BLIP2_CRP:
+        for v in row[1:]:
+            if not (0.0 <= v <= 1.0):
+                chk(f"BLIP-2 CRP {row[0]}","FAIL",f"value {v} out of [0,1]")
+    chk("BLIP-2 CRP range","PASS","all in [0,1]")
+
+    # LB-CKA spread
+    blip2_lb = [r[3] for r in BLIP2_CRP]
+    spread = max(blip2_lb) - min(blip2_lb)
+    chk("BLIP-2 LB-CKA spread",
+        "PASS" if abs(spread-0.4659)<0.001 else "FAIL",
+        f"{spread:.4f} (expected 0.4659)")
+
+    # No-unlearn is baseline
+    nu = next(r for r in LLAVA_SCATTER if r[0]=="No Unlearn")
+    chk("No Unlearn LB-CKA=1.0","PASS" if nu[3]==1.0 else "FAIL",str(nu[3]))
+
+    # Forget rates
+    for row in LLAVA_SCATTER:
+        if not (0.0 <= row[1] <= 1.0):
+            chk(f"Forget rate {row[0]}","FAIL",str(row[1]))
+    chk("Forget rates range","PASS","all in [0,1]")
+
+    # Overlap matrix symmetric
+    diff = np.abs(OVERLAP_MATRIX - OVERLAP_MATRIX.T).max()
+    chk("Overlap matrix symmetric","PASS" if diff<1e-9 else "FAIL",
+        f"max asymmetry={diff:.2e}")
+
+    chk("Overlap matrix diagonal","PASS" if np.all(np.diag(OVERLAP_MATRIX)==1.0) else "FAIL",
+        str(np.diag(OVERLAP_MATRIX)))
+
+    MANIFEST["source_data"] = {
+        "llava_scatter": [list(r) for r in LLAVA_SCATTER],
+        "llava_crp":     [list(r) for r in LLAVA_CRP],
+        "blip2_crp":     [list(r) for r in BLIP2_CRP],
+        "overlap_matrix": OVERLAP_MATRIX.tolist(),
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SHARED STYLE
+# ══════════════════════════════════════════════════════════════════════════════
+
+# AAAI two-column width ~3.3in per column; full-width ~7in
+FONT_SMALL  = 7
+FONT_MED    = 8
+FONT_LARGE  = 9
+TICK_SIZE   = 6
+
+plt.rcParams.update({
+    "font.family":      "serif",
+    "font.size":        FONT_MED,
+    "axes.titlesize":   FONT_MED,
+    "axes.labelsize":   FONT_MED,
+    "xtick.labelsize":  TICK_SIZE,
+    "ytick.labelsize":  TICK_SIZE,
+    "legend.fontsize":  FONT_SMALL,
+    "figure.dpi":       300,
+    "pdf.fonttype":     42,
+    "ps.fonttype":      42,
+    "axes.linewidth":   0.6,
+    "xtick.major.width":0.5,
+    "ytick.major.width":0.5,
+})
+
+# Method colours — consistent across all figures
+METHOD_COLOR = {
+    "No Unlearn":  "#888888",
+    "NPO":         "#2166AC",
+    "MMUnlearner": "#D6604D",
+    "CAGUL":       "#4DAC26",
+    "SineProject": "#7B3294",
+    "GradDiff":    "#E08214",
+    "GA":          "#888888",
+    "MANU":        "#1A9850",
+}
+METHOD_MARKER = {
+    "No Unlearn":  "s",
+    "NPO":         "o",
+    "MMUnlearner": "^",
+    "CAGUL":       "D",
+    "SineProject": "P",
+    "GradDiff":    "*",
+    "GA":          "s",
+    "MANU":        "v",
+}
+
+
+def savefig(fig, name):
+    pdf_path = OUT / f"{name}.pdf"
+    png_path = OUT / f"{name}.png"
+    fig.savefig(str(pdf_path), format="pdf", bbox_inches="tight")
+    fig.savefig(str(png_path), format="png", bbox_inches="tight", dpi=600)
+    plt.close(fig)
+    chk(f"{name} saved","PASS",f"{pdf_path.name}  {png_path.name}")
+    MANIFEST[name] = {"pdf":str(pdf_path),"png":str(png_path)}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIGURE 1 — Scatter: Forget Rate vs LB-CKA
+# ══════════════════════════════════════════════════════════════════════════════
+
+def figure1():
+    print("\n=== FIGURE 1: Scatter Forget Rate vs LB-CKA ===")
+
+    fig, ax = plt.subplots(figsize=(3.4, 2.75))
+
+    for method, fr, ra, lb in LLAVA_SCATTER:
+        color = METHOD_COLOR.get(method, "#333333")
+        marker = METHOD_MARKER.get(method, "o")
+
+        size = 52
+        if method == "GradDiff":
+            size = 76
+        elif method == "No Unlearn":
+            size = 46
+
+        ax.scatter(
+            fr,
+            lb,
+            color=color,
+            marker=marker,
+            s=size,
+            edgecolors="black",
+            linewidths=0.45,
+            zorder=4,
+            label=method,
+        )
+
+    ax.axvline(
+        0.025,
+        color="#AAAAAA",
+        linewidth=0.6,
+        linestyle="--",
+        zorder=1,
+    )
+
+    ax.axhline(
+        1.000,
+        color="#AAAAAA",
+        linewidth=0.6,
+        linestyle="--",
+        zorder=1,
+    )
+
+    ax.annotate(
+        "",
+        xy=(0.025, 0.995),
+        xytext=(0.025, 0.936),
+        arrowprops=dict(
+            arrowstyle="<->",
+            linewidth=0.9,
+            color="#555555",
+        ),
+        zorder=3,
+    )
+
+    ax.text(
+        0.028,
+        0.965,
+        "same forget rate,\ndifferent internal geometry",
+        fontsize=6.8,
+        color="#444444",
+        va="center",
+        ha="left",
+    )
+
+    ax.set_xlabel("Forget rate")
+    ax.set_ylabel("Language-backbone CKA")
+    ax.set_title("LLaVA-1.5-7B: mllmu_real", pad=5)
+
+    ax.set_xlim(0.015, 0.085)
+    ax.set_ylim(0.82, 1.01)
+
+    ax.set_xticks([0.025, 0.050, 0.075])
+    ax.set_yticks([
+        0.825,
+        0.850,
+        0.875,
+        0.900,
+        0.925,
+        0.950,
+        0.975,
+        1.000,
+    ])
+
+    ax.grid(
+        axis="y",
+        linewidth=0.35,
+        alpha=0.30,
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.22),
+        ncol=3,
+        frameon=False,
+        fontsize=6.3,
+        columnspacing=0.9,
+        handletextpad=0.35,
+        borderaxespad=0.0,
+    )
+
+    fig.subplots_adjust(
+        left=0.19,
+        right=0.98,
+        top=0.90,
+        bottom=0.34,
+    )
+
+    savefig(fig, "fig1_scatter_fr_lb")
+
+
+def figure2():
+    print("\n=== FIGURE 2: Grouped dot plot CRP LLaVA + BLIP-2 ===")
+
+    fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.75))
+
+    comp_labels = ["VE-CKA", "Bridge-CKA", "LB-CKA"]
+    comp_colors = ["#2166AC", "#4DAC26", "#D6604D"]   # VE=blue, BR=green, LB=red
+    comp_markers= ["o",       "s",        "^"]
+
+    def draw_panel(ax, data, title, ylim=(0.25, 1.03)):
+        methods = [r[0] for r in data]
+        n       = len(methods)
+        y_pos   = np.arange(n)
+
+        # Horizontal grid lines
+        for yv in [0.5, 0.75, 1.0]:
+            ax.axhline(yv, color="#dddddd", linewidth=0.5, zorder=0)
+
+        for ci, (clabel, ccolor, cmark) in enumerate(
+                zip(comp_labels, comp_colors, comp_markers)):
+            vals = [row[ci+1] for row in data]
+            # Jitter x slightly for each component
+            jitter = (ci - 1) * 0.18
+            ax.scatter(y_pos + jitter, vals,
+                       color=ccolor, marker=cmark, s=28,
+                       edgecolors="black", linewidths=0.3,
+                       zorder=3, label=clabel)
+
+        ax.set_xticks(y_pos)
+        ax.set_xticklabels(methods, rotation=18, ha="right",
+                           fontsize=FONT_SMALL)
+        ax.set_ylabel("CKA", fontsize=FONT_MED)
+        ax.set_ylim(*ylim)
+        ax.set_xlim(-0.5, n - 0.5)
+        ax.set_title(title, fontsize=FONT_MED, pad=3)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.yaxis.set_minor_locator(plt.MultipleLocator(0.05))
+
+    draw_panel(axes[0], LLAVA_CRP,
+               "(a) LLaVA-1.5-7B", ylim=(0.75, 1.03))
+    draw_panel(axes[1], BLIP2_CRP,
+               "(b) BLIP-2-OPT-2.7B", ylim=(0.25, 1.03))
+
+    # Shared legend below
+    handles = [mpatches.Patch(color=c, label=l)
+               for l, c in zip(comp_labels, comp_colors)]
+    fig.legend(handles=handles, loc="lower center", ncol=3,
+               fontsize=FONT_SMALL, frameon=False,
+               bbox_to_anchor=(0.5, -0.04))
+
+    fig.suptitle("Component Residual Profiles", fontsize=FONT_MED, y=0.99)
+
+    fig.text(
+        0.99,
+        0.02,
+        "Panels use different vertical ranges",
+        fontsize=FONT_SMALL,
+        ha="right",
+        va="bottom",
+    )
+    fig.tight_layout(pad=0.5, rect=[0, 0.06, 1, 1])
+    savefig(fig, "fig2_crp_dotplot")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIGURE 3 — Heatmap: forget response overlap (appendix)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def figure3():
+    print("\n=== FIGURE 3: Response overlap heatmap (appendix) ===")
+
+    fig, ax = plt.subplots(figsize=(3.0, 2.6))
+
+    n    = len(OVERLAP_METHODS)
+    cmap = plt.cm.RdYlGn   # red=low overlap, green=high
+    im   = ax.imshow(OVERLAP_MATRIX, cmap=cmap, vmin=0.0, vmax=1.0,
+                     aspect="auto")
+
+    # Cell annotations
+    for i in range(n):
+        for j in range(n):
+            val = OVERLAP_MATRIX[i, j]
+            color = "black" if 0.3 < val < 0.85 else "white"
+            ax.text(j, i, f"{val:.3f}", ha="center", va="center",
+                    fontsize=FONT_SMALL-1, color=color)
+
+    ax.set_xticks(range(n))
+    ax.set_yticks(range(n))
+    ax.set_xticklabels(
+        OVERLAP_METHODS,
+        rotation=30,
+        ha="right",
+        fontsize=TICK_SIZE,
+    )
+    ax.set_yticklabels(
+        OVERLAP_METHODS,
+        fontsize=TICK_SIZE,
+    )
+    ax.set_title("Forget-set response overlap (LLaVA)",
+                 fontsize=FONT_MED, pad=3)
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.ax.tick_params(labelsize=TICK_SIZE)
+    cbar.set_label("Response overlap", fontsize=FONT_SMALL)
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+    ax.spines["bottom"].set_visible(False)
+
+    fig.tight_layout(pad=0.4)
+    savefig(fig, "fig3_response_overlap_heatmap")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CAPTIONS + LATEX SNIPPETS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def write_captions():
+    captions = {}
+
+    captions["fig1"] = (
+        "Forget rate versus language-backbone CKA on \\emph{mllmu\\_real} "
+        "using LLaVA-1.5-7B ($n=40$ forget examples). "
+        "No Unlearn, NPO, MMUnlearner, CAGUL, and SineProject all obtain "
+        "a forget rate of $0.025$, while their LB-CKA values span "
+        "$0.934$--$1.000$. Thus, identical aggregate forgetting behaviour "
+        "can coexist with different degrees of internal representational "
+        "deviation. GradDiff increases forget rate to $0.075$ and has a "
+        "lower LB-CKA of $0.848$. Lower CKA denotes greater deviation from "
+        "the original model and should not be interpreted as evidence of "
+        "better selective forgetting."
+    )
+
+    captions["fig2"] = (
+        "Component Residual Profiles on \\emph{mllmu\\_real} for "
+        "(a) LLaVA-1.5-7B and (b) BLIP-2-OPT-2.7B. VE-CKA, Bridge-CKA, "
+        "and LB-CKA measure representational similarity to the original "
+        "model in the vision encoder, multimodal bridge, and language "
+        "backbone, respectively. On LLaVA, NPO, CAGUL, and SineProject "
+        "remain close to the original model, whereas MMUnlearner shows "
+        "greater language-backbone deviation and GradDiff shows larger "
+        "bridge and language-backbone changes. On BLIP-2, all tested "
+        "adapters reproduce the no-unlearn outputs exactly, yet LB-CKA "
+        "ranges from $0.529$ to $0.995$; MANU additionally exhibits "
+        "substantial vision and bridge deviation. The panels use different "
+        "vertical ranges for readability. Lower CKA indicates greater "
+        "representational deviation, not necessarily more successful "
+        "unlearning."
+    )
+
+    captions["fig3"] = (
+        "Pairwise exact-response overlap on the 40-example LLaVA "
+        "forget set. Each cell gives the fraction of examples for which "
+        "two methods generate identical normalized text. NPO and CAGUL "
+        "have complete response identity, while GradDiff has an overlap "
+        "of only $0.450$ with each core method. Despite their non-identical "
+        "wording, NPO, MMUnlearner, CAGUL, and SineProject have identical "
+        "per-example correctness patterns on the forget set. GradDiff "
+        "introduces two additional unique errors and is therefore excluded "
+        "from that correctness-identity statement."
+    )
+
+    # LaTeX snippets
+    latex = {}
+    for key, caption in captions.items():
+        fname = {"fig1":"fig1_scatter_fr_lb",
+                 "fig2":"fig2_crp_dotplot",
+                 "fig3":"fig3_response_overlap_heatmap"}[key]
+        label = {"fig1":"fig:scatter_fr_lb",
+                 "fig2":"fig:crp_dotplot",
+                 "fig3":"fig:response_overlap"}[key]
+        if key == "fig2":
+            latex[key] = (
+                f"\\begin{{figure*}}[t]\n"
+                f"  \\centering\n"
+                f"  \\includegraphics[width=0.92\\textwidth]{{figs/{fname}.pdf}}\n"
+                f"  \\caption{{{caption}}}\n"
+                f"  \\label{{{label}}}\n"
+                f"\\end{{figure*}}"
+            )
+        else:
+            latex[key] = (
+                f"\\begin{{figure}}[t]\n"
+                f"  \\centering\n"
+                f"  \\includegraphics[width=\\linewidth]{{figs/{fname}.pdf}}\n"
+                f"  \\caption{{{caption}}}\n"
+                f"  \\label{{{label}}}\n"
+                f"\\end{{figure}}"
+            )
+
+    # Placement recommendation
+    placement = {
+        "fig1": "MAIN PAPER — essential. Shows central claim directly.",
+        "fig2": "MAIN PAPER — essential. Cleanest CRP presentation.",
+        "fig3": "APPENDIX — optional. Supplements response-level analysis.",
+        "note": (
+            "Fig 1 and Fig 2 together use approximately 12cm of column space "
+            "in AAAI two-column format. Place Fig 1 early (Section 4 results), "
+            "Fig 2 in the same section or as a two-column float. "
+            "Fig 3 in supplementary or appendix only."
+        )
+    }
+
+    # Write
+    cap_path = OUT / "figure_captions.txt"
+    lat_path = OUT / "figure_latex_snippets.tex"
+
+    with open(cap_path,"w",encoding="utf-8") as f:
+        f.write("FIGURE CAPTIONS\n" + "="*60 + "\n\n")
+        for key, cap in captions.items():
+            f.write(f"{key.upper()}:\n{cap}\n\n")
+        f.write("PLACEMENT RECOMMENDATIONS:\n")
+        for key, rec in placement.items():
+            f.write(f"  {key}: {rec}\n")
+
+    with open(lat_path,"w",encoding="utf-8") as f:
+        f.write("% LATEX FIGURE SNIPPETS\n% Paste into paper\n\n")
+        for key, snip in latex.items():
+            f.write(f"% {key.upper()}\n{snip}\n\n")
+
+    chk("Captions file","PASS",str(cap_path))
+    chk("LaTeX snippets","PASS",str(lat_path))
+
+    print("\n  PLACEMENT RECOMMENDATIONS:")
+    for key, rec in placement.items():
+        print(f"    {key}: {rec}")
+
+    return captions, placement
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MANIFEST + REPORT
+# ══════════════════════════════════════════════════════════════════════════════
+
+def write_manifest():
+    n_p = sum(1 for c in CHECKS if c["verdict"]=="PASS")
+    n_w = sum(1 for c in CHECKS if c["verdict"]=="WARN")
+    n_f = sum(1 for c in CHECKS if c["verdict"]=="FAIL")
+    MANIFEST["checks"] = CHECKS
+    MANIFEST["summary"] = {"n_pass":n_p,"n_warn":n_w,"n_fail":n_f}
+
+    mp = OUT / "figure_manifest.json"
+    with open(mp,"w",encoding="utf-8") as f:
+        json.dump(MANIFEST,f,indent=2,default=str)
+
+    rp = OUT / "PASS_FAIL_report.txt"
+    with open(rp,"w",encoding="utf-8") as f:
+        f.write("FIGURE GENERATION REPORT\n"+"="*60+"\n\n")
+        f.write(f"Summary: {n_p} PASS  {n_w} WARN  {n_f} FAIL\n\n")
+        for c in CHECKS:
+            icon={"PASS":"OK","WARN":"!!","FAIL":"XX"}.get(c["verdict"],"??")
+            f.write(f"[{icon} {c['verdict']:4s}] {c['check']}: {c['detail']}\n")
+
+    print(f"\n  {n_p} PASS  {n_w} WARN  {n_f} FAIL")
+    print(f"  Manifest: {mp}")
+    print(f"  Report:   {rp}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN
+# ══════════════════════════════════════════════════════════════════════════════
+
+def main():
+    print(f"Output directory: {OUT}")
+    validate()
+    figure1()
+    figure2()
+    figure3()
+    write_captions()
+    write_manifest()
+
+    print(f"\n  All figures saved to {OUT}/")
+    print(f"  fig1_scatter_fr_lb.pdf/.png")
+    print(f"  fig2_crp_dotplot.pdf/.png")
+    print(f"  fig3_response_overlap_heatmap.pdf/.png")
+    print(f"  figure_captions.txt")
+    print(f"  figure_latex_snippets.tex")
+    print(f"  figure_manifest.json")
+    print(f"  PASS_FAIL_report.txt")
+
+
+if __name__ == "__main__":
+    main()

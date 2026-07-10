@@ -1,0 +1,6 @@
+Method,Rephrase,Visual-Crop,Visual-Perturb,Mean Recovery,Bridge r,p,n,Correlation Source
+GA,N/A,N/A,N/A,N/A,N/A,N/A,0,no_recovery_found
+NPO,N/A,N/A,N/A,N/A,N/A,N/A,0,no_recovery_found
+MMUNLEARNER,N/A,N/A,N/A,N/A,N/A,N/A,0,no_recovery_found
+CAGUL,N/A,N/A,N/A,N/A,N/A,N/A,0,no_recovery_found
+MANU,N/A,N/A,N/A,N/A,N/A,N/A,0,no_recovery_found

@@ -1,0 +1,11 @@
+{
+  "plotted_methods": {
+    "NPO": 0.872,
+    "MMUnlearner": 0.869,
+    "CAGUL": 0.858
+  },
+  "baseline_no_unlearn": 0.87,
+  "ga_excluded": true,
+  "ga_exclusion_reason": "dead adapter (lora_B=0); CNIS measured on base model",
+  "n_entities": null
+}

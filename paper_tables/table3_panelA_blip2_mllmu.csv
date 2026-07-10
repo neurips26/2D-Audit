@@ -1,0 +1,6 @@
+﻿Method,VE_CKA,BR_CKA,LB_CKA,Retain,Taxonomy,_source,_retain_key
+GA,1.0000,1.0000,0.9945,1.0000,Under-forgetting,outputs\blip2_mllmu\blip2\per_method\ga.json,mean_retain_utility
+NPO,1.0000,1.0000,0.6699,1.0000,Under-forgetting,outputs\blip2_mllmu\blip2\per_method\npo.json,mean_retain_utility
+MMUNLEARNER,1.0000,1.0000,0.6721,1.0000,Under-forgetting,outputs\blip2_mllmu\blip2\per_method\mmunlearner.json,mean_retain_utility
+CAGUL,1.0000,1.0000,0.9834,1.0000,Under-forgetting,outputs\blip2_mllmu\blip2\per_method\cagul.json,mean_retain_utility
+MANU,0.5753,0.3157,0.5286,1.0000,Representational disruption,outputs\blip2_mllmu\blip2\per_method\manu.json,mean_retain_utility

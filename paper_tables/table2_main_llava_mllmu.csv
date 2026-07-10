@@ -1,0 +1,5 @@
+Method,VE_CKA,BR_CKA,LB_CKA,Retain,CNIS,Taxonomy,_source,_retain_key
+GA,0.9973,0.9910,0.8987,1.0000,0.8690,Under-forgetting,outputs\llava\per_method\ga.json,mean_retain_utility
+NPO,0.9970,0.9861,0.8972,1.0000,0.8720,Under-forgetting,outputs\llava\per_method\npo.json,mean_retain_utility
+MMUNLEARNER,0.9972,0.9863,0.8760,1.0000,0.8690,Under-forgetting,outputs\llava\per_method\mmunlearner.json,mean_retain_utility
+CAGUL,0.9972,0.9876,0.9035,1.0000,0.8580,Under-forgetting,outputs\llava\per_method\cagul.json,mean_retain_utility
